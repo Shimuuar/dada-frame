@@ -25,6 +25,9 @@ import qualified Data.Vector.Generic.Mutable as M
 import qualified Data.Vector                 as V
 import qualified Data.Vector.HFixed          as H
 import qualified Data.Vector.HFixed.Cont     as C
+import qualified Data.Vector.HFixed.Class    as C
+import           Data.Vector.HFixed.Cont          (Arity)
+import           Data.Vector.HFixed.TypeFuns
 import           Data.Vector.HFixed               (HVector,Elems)
 import           Data.Vector.HFixed.Functor.HVecF (HVecF)
 -- import           Data.Vector.HFixed.HVec          (HVec)
@@ -48,7 +51,7 @@ data DF    a = DF  Int (HVecF (Elems a) V.Vector)
 data MDF s a = MDF Int (HVecF (Elems a) (G.Mutable V.Vector s))
 
 instance (HVector a, Show a) => Show (DF a) where
-  show = unlines . map show . G.toList 
+  show = unlines . map show . G.toList
 
 ----------------------------------------------------------------
 -- Vector API
@@ -76,7 +79,7 @@ instance HVector a => M.MVector MDF a where
   --
   basicInitialize _ = return ()
   --
-  basicUnsafeRead (MDF _ hv) i =    
+  basicUnsafeRead (MDF _ hv) i =
     H.sequence $ H.mapFunctor (\v -> M.basicUnsafeRead v i) hv
   --
   basicUnsafeWrite (MDF _ hv) i a = do
@@ -171,3 +174,25 @@ subtypeDF (DF i v)
   = DF i
   $ H.inspectF v
   $ fmap C.vectorF (subtypeTF (Proxy @ (Labels b)) (Proxy @ (Labels a)))
+
+
+----------------------------------------------------------------
+-- Data types
+----------------------------------------------------------------
+
+data a :+: b = a :+: b
+  deriving (Show,Eq)
+
+type instance Labels (a :+: b) = Labels a ++ Labels b
+
+instance ( Arity (Elems a ++ Elems b)
+         , HVector a
+         , HVector b
+         ) => HVector (a :+: b) where
+  type Elems (a :+: b) = Elems a ++ Elems b
+  inspect (a :+: b) f = H.inspect b
+                      $ H.inspect a
+                      $ C.curryMany f
+  construct = C.uncurryMany $ do
+    a <- H.construct
+    return $ (a :+:) <$> H.construct
