@@ -31,3 +31,4 @@ Library
                      , vector              >=0.11
                      , lens                >=4.15
   Exposed-modules:     Dada.Frame
+                       Dada.Internal.Lens
