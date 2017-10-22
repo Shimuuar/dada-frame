@@ -24,6 +24,7 @@ import qualified Data.Vector.Generic         as G
 import qualified Data.Vector.Generic.Mutable as M
 import qualified Data.Vector                 as V
 import qualified Data.Vector.HFixed          as H
+import qualified Data.Vector.HFixed.Cont     as C
 import           Data.Vector.HFixed               (HVector,Elems)
 import           Data.Vector.HFixed.Functor.HVecF (HVecF)
 -- import           Data.Vector.HFixed.HVec          (HVec)
@@ -145,8 +146,28 @@ lev :: forall sym f a. ( SymIndex sym (Labels a) (Elems a)
                        , Functor f
                        )
     => L sym
---    -> (LabelTy sym (Labels a) (Elems a) -> f (LabelTy sym (Labels a) (Elems a)))
     -> (Field a sym -> f (Field a sym))
     -> a -> f a
 lev _ f v = H.inspect v
           $ lensF (Proxy @ sym) (Proxy @ (Labels a)) f H.construct
+
+subtype
+  :: forall a b. ( Subtype (Labels b) (Elems b) (Labels a) (Elems a)
+                 , HVector a
+                 , HVector b
+                 )
+  => a -> b
+subtype v
+  = H.inspect v
+  $ fmap C.vector (subtypeF (Proxy @ (Labels b)) (Proxy @ (Labels a)))
+
+subtypeDF
+  :: forall a b. ( Subtype (Labels b) (Elems b) (Labels a) (Elems a)
+                 , HVector a
+                 , HVector b
+                 )
+  => DF a -> DF b
+subtypeDF (DF i v)
+  = DF i
+  $ H.inspectF v
+  $ fmap C.vectorF (subtypeTF (Proxy @ (Labels b)) (Proxy @ (Labels a)))
