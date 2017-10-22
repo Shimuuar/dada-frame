@@ -1,0 +1,33 @@
+Name:           dada-frame
+Version:        0.1
+Synopsis:       Experiment with data-frames
+Description:
+  This package is product of taking fixed-vector-hetero's type-level
+  trickery, adding some more type-level craziness and putting some
+  lens on top in hopes of creating library for data-frames.
+  .
+  One shouldn't expect this package to be of any practical use
+  whatsoever. To make this point clear package's name is time poor
+  wordplay and reference to dadaism at the same.
+
+Cabal-Version:  >= 1.10
+License:        BSD3
+License-File:   LICENSE
+Author:         Aleksey Khudyakov <alexey.skladnoy@gmail.com>
+Maintainer:     Aleksey Khudyakov <alexey.skladnoy@gmail.com>
+Homepage:       http://bitbucket.org/Shimuuar/dada-frame
+Category:       Data
+Build-Type:     Simple
+
+source-repository head
+  type:     hg
+  location: http://bitbucket.org/Shimuuar/dada-frame
+
+Library
+  Ghc-options:          -Wall
+  Default-Language:    Haskell2010
+  Build-Depends:       base                >=4.10 && <5
+                     , fixed-vector-hetero >=0.3.1
+                     , vector              >=0.11
+                     , lens                >=4.15
+  Exposed-modules:     Dada.Frame
