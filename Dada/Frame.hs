@@ -53,6 +53,30 @@ data MDF s a = MDF Int (HVecF (Elems a) (G.Mutable V.Vector s))
 instance (HVector a, Show a) => Show (DF a) where
   show = unlines . map show . G.toList
 
+-- -- | Index
+-- data Idx i a = Idx
+--   { idxIdxVec :: V.Vector i     -- Mapping int to number
+--   , idxIdxMap :: Map i Int
+--   , idxBuffer :: DF a
+--   }
+
+-- innerJoin
+--   :: Ord i
+--   => Idx i a -> Idx i b -> Idx i (a :+: b)
+-- innnerJoin = undefined
+
+-- leftJoin
+--   :: Ord i
+--   => Idx i a -> Idx i b -> Idx i (a :+: Maybe b) -- How to deal with Maybes???
+-- leftJoin = undefined
+
+-- rightJoin
+--   :: Ord i
+--   => Idx i a -> Idx i b -> Idx i (Maybe a :+: b) -- How to deal with Maybes???
+-- rightJoin = undefined
+
+
+
 ----------------------------------------------------------------
 -- Vector API
 ----------------------------------------------------------------
@@ -143,6 +167,26 @@ le _ f (DF i vs)
                        | otherwise                = error "Length mismatch!"
            in check <$> f v
 
+-- | Lens which gives access to individual columns of data type
+le' :: forall sym f a b x. ( SymIndex sym (Labels a) (Elems a)
+                           , HVector a
+                           , HVector b
+                           , Elems b ~ UpdatedTypes sym (Labels a) (Elems a) x
+                           , Functor f
+                           )
+    => L sym
+    -> (V.Vector (Field a sym) -> f (V.Vector x))
+    -> DF a -> f (DF b)
+le' _ f (DF i vs)
+  = fmap (DF i)
+  $ H.inspectF vs
+  $ lensChTF (Proxy @ sym) (Proxy @ (Labels a)) f' H.constructF
+  where
+    f' v = let check u | V.length u == V.length v = u
+                       | otherwise                = error "Length mismatch!"
+           in check <$> f v
+
+
 -- | Lens which gives access to individual values in labeled tuple
 lev :: forall sym f a. ( SymIndex sym (Labels a) (Elems a)
                        , HVector a
@@ -153,6 +197,19 @@ lev :: forall sym f a. ( SymIndex sym (Labels a) (Elems a)
     -> a -> f a
 lev _ f v = H.inspect v
           $ lensF (Proxy @ sym) (Proxy @ (Labels a)) f H.construct
+
+-- | Lens which gives access to individual values in labeled tuple
+lev' :: forall sym f a b x. ( SymIndex sym (Labels a) (Elems a)
+                            , HVector a
+                            , HVector b
+                            , Elems b ~ UpdatedTypes sym (Labels a) (Elems a) x
+                            , Functor f
+                            )
+     => L sym
+     -> (Field a sym -> f x)
+     -> a -> f b
+lev' _ f v = H.inspect v
+           $ lensChF (Proxy @ sym) (Proxy @ (Labels a)) f H.construct
 
 subtype
   :: forall a b. ( Subtype (Labels b) (Elems b) (Labels a) (Elems a)
