@@ -1,12 +1,9 @@
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE KindSignatures        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE PolyKinds             #-}
-{-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
@@ -29,12 +26,10 @@ import qualified Data.Vector.HFixed.Class    as C
 import           Data.Vector.HFixed.Cont          (Arity)
 import           Data.Vector.HFixed.TypeFuns
 import           Data.Vector.HFixed               (HVector,Elems)
-import           Data.Vector.HFixed.Functor.HVecF (HVecF)
--- import           Data.Vector.HFixed.HVec          (HVec)
+import           Data.Vector.HFixed.HVec          (HVecF)
 
 import GHC.TypeLits
 import GHC.OverloadedLabels
-import GHC.Generics (Generic)
 
 import Dada.Internal.Lens
 
@@ -88,48 +83,50 @@ instance HVector a => M.MVector MDF a where
   --
   basicUnsafeSlice i n (MDF _ hv)
     = MDF n
-    $ H.mapFunctor (M.basicUnsafeSlice i n) hv
+    $ H.mapNat (M.basicUnsafeSlice i n) hv
   --
   basicOverlaps (MDF _ hv1) (MDF _ hv2)
     = getAny
     $ getConst
     $ H.sequence_
-    $ H.zipNatF (\v1 v2 -> Const (Any (M.basicOverlaps v1 v2))) hv1 hv2
+    $ H.zipWithNatF (\v1 v2 -> Const (Any (M.basicOverlaps v1 v2))) hv1 hv2
   --
   basicUnsafeNew n = do
     hv <- H.sequenceF
-        $ H.replicateF (Compose (M.basicUnsafeNew n))
+        $ H.replicateNatF (Compose (M.basicUnsafeNew n))
     return $ MDF n hv
   --
   basicInitialize _ = return ()
   --
   basicUnsafeRead (MDF _ hv) i =
-    H.sequence $ H.mapFunctor (\v -> M.basicUnsafeRead v i) hv
+    H.sequence $ H.mapNat (\v -> M.basicUnsafeRead v i) hv
   --
-  basicUnsafeWrite (MDF _ hv) i a = do
-    let vecA = H.wrap Identity a :: HVecF (Elems a) Identity
-    fmap getConst
-      $ getCompose
-      $ H.sequence_
-      $ H.zipNatF (\v (Identity x) -> Compose (Const <$> M.basicUnsafeWrite v i x)) hv vecA
+  basicUnsafeWrite (MDF _ hv) i a
+    = fmap getConst
+    $ getCompose
+    $ H.sequence_
+    $ H.zipWithNatF (\v (Identity x) -> Compose (Const <$> M.basicUnsafeWrite v i x))
+        hv
+       (H.wrap Identity a)
+
 
 instance HVector a => G.Vector DF a where
   basicLength (DF i _) = i
   --
   basicUnsafeSlice i n (DF _ vs)
     = DF n
-    $ H.mapFunctor (G.basicUnsafeSlice i n) vs
+    $ H.mapNat (G.basicUnsafeSlice i n) vs
   --
   basicUnsafeIndexM (DF _ vs) i
     = H.sequence
-    $ H.mapFunctor (\v -> G.basicUnsafeIndexM v i) vs
+    $ H.mapNat (\v -> G.basicUnsafeIndexM v i) vs
   --
   basicUnsafeFreeze (MDF i mv) = do
-    vs <- H.sequenceF $ H.mapFunctor (Compose . G.basicUnsafeFreeze) mv
+    vs <- H.sequenceF $ H.mapNat (Compose . G.basicUnsafeFreeze) mv
     return $ DF i vs
   --
   basicUnsafeThaw (DF i vs) = do
-    mv <- H.sequenceF $ H.mapFunctor (Compose . G.basicUnsafeThaw) vs
+    mv <- H.sequenceF $ H.mapNat (Compose . G.basicUnsafeThaw) vs
     return $ MDF i mv
 
 
@@ -144,7 +141,7 @@ type family Labels a :: [Symbol]
 type Field a sym = LabelTy sym (Labels a) (Elems a)
 
 -- | Proxy type which is used to create overloaded labels
-data L sym = L
+data L (sym :: Symbol) = L
 
 instance (sym ~ sym') => IsLabel sym' (L sym) where
   fromLabel = L

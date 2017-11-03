@@ -30,6 +30,7 @@ import           Data.Vector.HFixed.Cont  ( ContVec(..), cons, vector
                                           , ContVecF(..),consF,vectorF
                                           )
 import qualified Data.Vector.HFixed.Cont as C
+import qualified Data.Vector.HFixed      as H
 import GHC.TypeLits
 
 
@@ -159,7 +160,7 @@ class Subtype (to :: [Symbol]) (xs :: [*]) (from :: [Symbol]) (ys :: [*]) where
             -> TFun f ys (ContVecF xs f)
 
 instance Arity ys => Subtype '[] '[] from ys where
-  subtypeF  _ _ = pure C.mk0
+  subtypeF  _ _ = pure (H.mk0)
   subtypeTF _ _ = pure (ContVecF unTFun)
 
 instance ( Arity ys
