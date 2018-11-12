@@ -79,28 +79,35 @@ instance (HVector a, Show a) => Show (DF a) where
 type instance G.Mutable DF = MDF
 
 instance HVector a => M.MVector MDF a where
+  {-# INLINE basicLength #-}
   basicLength          (MDF i _)   = i
   --
+  {-# INLINE basicUnsafeSlice #-}
   basicUnsafeSlice i n (MDF _ hv)
     = MDF n
     $ H.mapNat (M.basicUnsafeSlice i n) hv
   --
+  {-# INLINE basicOverlaps #-}
   basicOverlaps (MDF _ hv1) (MDF _ hv2)
     = getAny
     $ getConst
     $ H.sequence_
     $ H.zipWithNatF (\v1 v2 -> Const (Any (M.basicOverlaps v1 v2))) hv1 hv2
   --
+  {-# INLINE basicUnsafeNew #-}
   basicUnsafeNew n = do
     hv <- H.sequenceF
         $ H.replicateNatF (Compose (M.basicUnsafeNew n))
     return $ MDF n hv
   --
+  {-# INLINE basicInitialize #-}
   basicInitialize _ = return ()
   --
+  {-# INLINE basicUnsafeRead #-}
   basicUnsafeRead (MDF _ hv) i =
     H.sequence $ H.mapNat (\v -> M.basicUnsafeRead v i) hv
   --
+  {-# INLINE basicUnsafeWrite #-}
   basicUnsafeWrite (MDF _ hv) i a
     = fmap getConst
     $ getCompose
@@ -110,21 +117,27 @@ instance HVector a => M.MVector MDF a where
        (H.wrap Identity a)
 
 
+
 instance HVector a => G.Vector DF a where
+  {-# INLINE basicLength #-}
   basicLength (DF i _) = i
   --
+  {-# INLINE basicUnsafeSlice #-}
   basicUnsafeSlice i n (DF _ vs)
     = DF n
     $ H.mapNat (G.basicUnsafeSlice i n) vs
   --
+  {-# INLINE basicUnsafeIndexM #-}
   basicUnsafeIndexM (DF _ vs) i
     = H.sequence
     $ H.mapNat (\v -> G.basicUnsafeIndexM v i) vs
   --
+  {-# INLINE basicUnsafeFreeze #-}
   basicUnsafeFreeze (MDF i mv) = do
     vs <- H.sequenceF $ H.mapNat (Compose . G.basicUnsafeFreeze) mv
     return $ DF i vs
   --
+  {-# INLINE basicUnsafeThaw #-}
   basicUnsafeThaw (DF i vs) = do
     mv <- H.sequenceF $ H.mapNat (Compose . G.basicUnsafeThaw) vs
     return $ MDF i mv
