@@ -206,7 +206,7 @@ lev :: forall sym f a. ( SymIndex sym (Labels a) (Elems a)
     -> (Field a sym -> f (Field a sym))
     -> a -> f a
 lev _ f v = H.inspect v
-          $ lensF (Proxy @ sym) (Proxy @ (Labels a)) f H.construct
+          $ lensTF (Proxy @ sym) (Proxy @ (Labels a)) (fmap Identity . f . runIdentity) H.construct
 
 -- | Lens which gives access to individual values in labeled tuple
 lev' :: forall sym f a b x. ( SymIndex sym (Labels a) (Elems a)
@@ -219,7 +219,7 @@ lev' :: forall sym f a b x. ( SymIndex sym (Labels a) (Elems a)
      -> (Field a sym -> f x)
      -> a -> f b
 lev' _ f v = H.inspect v
-           $ lensChF (Proxy @ sym) (Proxy @ (Labels a)) f H.construct
+           $ lensChTF (Proxy @ sym) (Proxy @ (Labels a)) (fmap Identity . f . runIdentity) H.construct
 
 subtype
   :: forall a b. ( Subtype (Labels b) (Elems b) (Labels a) (Elems a)
@@ -229,7 +229,7 @@ subtype
   => a -> b
 subtype v
   = H.inspect v
-  $ fmap C.vector (subtypeF (Proxy @ (Labels b)) (Proxy @ (Labels a)))
+  $ fmap C.vector (subtypeTF (Proxy @ (Labels b)) (Proxy @ (Labels a)))
 
 subtypeDF
   :: forall a b. ( Subtype (Labels b) (Elems b) (Labels a) (Elems a)
@@ -263,3 +263,6 @@ instance ( Arity (Elems a ++ Elems b)
   construct = C.uncurryMany $ do
     a <- H.construct
     return $ (a :+:) <$> H.construct
+
+identity :: Lens' (Identity a) a
+identity = lens runIdentity (\_ -> Identity)
