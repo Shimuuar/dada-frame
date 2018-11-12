@@ -20,8 +20,8 @@ Category:       Data
 Build-Type:     Simple
 
 source-repository head
-  type:     hg
-  location: http://bitbucket.org/Shimuuar/dada-frame
+  type:     git
+  location: https://github.com/Shimuuar/dada-frame
 
 Library
   Ghc-options:          -Wall
