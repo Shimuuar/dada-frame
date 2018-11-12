@@ -23,7 +23,7 @@ import qualified Data.Vector                 as V
 import qualified Data.Vector.HFixed          as H
 import qualified Data.Vector.HFixed.Cont     as C
 import qualified Data.Vector.HFixed.Class    as C
-import           Data.Vector.HFixed.Cont          (Arity)
+import           Data.Vector.HFixed.Class         (Arity,ArityC)
 import           Data.Vector.HFixed.TypeFuns
 import           Data.Vector.HFixed               (HVector,Elems)
 import           Data.Vector.HFixed.HVec          (HVecF)
@@ -40,13 +40,13 @@ import Dada.Internal.Lens
 
 -- | Data frame for newtype. Internally it's implemented as structure
 --   of arrays.
-data DF    a = DF  Int (HVecF (Elems a) V.Vector)
+data DF  v   a = DF  Int (HVecF (Elems a) v)
 
 -- | Mutable variant of data frame
-data MDF s a = MDF Int (HVecF (Elems a) (G.Mutable V.Vector s))
+data MDF v s a = MDF Int (HVecF (Elems a) (G.Mutable v s))
 
-instance (HVector a, Show a) => Show (DF a) where
-  show = unlines . map show . G.toList
+-- instance (HVector a, Show a) => Show (DF a) where
+--   show = unlines . map show . G.toList
 
 -- -- | Index
 -- data Idx i a = Idx
@@ -76,70 +76,73 @@ instance (HVector a, Show a) => Show (DF a) where
 -- Vector API
 ----------------------------------------------------------------
 
-type instance G.Mutable DF = MDF
+type instance G.Mutable (DF v) = MDF v
 
-instance HVector a => M.MVector MDF a where
+instance ( ArityC (G.Vector v) (Elems a)
+         , HVector a
+         ) => M.MVector (MDF v) a where
   {-# INLINE basicLength #-}
   basicLength          (MDF i _)   = i
   --
   {-# INLINE basicUnsafeSlice #-}
   basicUnsafeSlice i n (MDF _ hv)
     = MDF n
-    $ H.mapNat (M.basicUnsafeSlice i n) hv
+    $ H.map (Proxy @ (G.Vector v)) (M.basicUnsafeSlice i n) hv
   --
   {-# INLINE basicOverlaps #-}
   basicOverlaps (MDF _ hv1) (MDF _ hv2)
     = getAny
     $ getConst
     $ H.sequence_
-    $ H.zipWithNatF (\v1 v2 -> Const (Any (M.basicOverlaps v1 v2))) hv1 hv2
+    $ H.zipWithF (Proxy @ (G.Vector v))
+        (\v1 v2 -> Const (Any (M.basicOverlaps v1 v2))) hv1 hv2
   --
   {-# INLINE basicUnsafeNew #-}
   basicUnsafeNew n = do
     hv <- H.sequenceF
-        $ H.replicateNatF (Compose (M.basicUnsafeNew n))
+        $ H.replicateF (Proxy @ (G.Vector v)) (Compose (M.basicUnsafeNew n))
     return $ MDF n hv
   --
   {-# INLINE basicInitialize #-}
-  basicInitialize _ = return ()
+  basicInitialize _ = return () -- FIXME
   --
   {-# INLINE basicUnsafeRead #-}
   basicUnsafeRead (MDF _ hv) i =
-    H.sequence $ H.mapNat (\v -> M.basicUnsafeRead v i) hv
+    H.sequence $ H.map (Proxy @ (G.Vector v)) (\v -> M.basicUnsafeRead v i) hv
   --
   {-# INLINE basicUnsafeWrite #-}
   basicUnsafeWrite (MDF _ hv) i a
     = fmap getConst
     $ getCompose
     $ H.sequence_
-    $ H.zipWithNatF (\v (Identity x) -> Compose (Const <$> M.basicUnsafeWrite v i x))
+    $ H.zipWithF (Proxy @ (G.Vector v))
+       (\v (Identity x) -> Compose (Const <$> M.basicUnsafeWrite v i x))
         hv
        (H.wrap Identity a)
 
 
-
-instance HVector a => G.Vector DF a where
+instance (HVector a, ArityC (G.Vector v) (Elems a)) => G.Vector (DF v) a where
   {-# INLINE basicLength #-}
   basicLength (DF i _) = i
   --
   {-# INLINE basicUnsafeSlice #-}
   basicUnsafeSlice i n (DF _ vs)
     = DF n
-    $ H.mapNat (G.basicUnsafeSlice i n) vs
+    $ H.map (Proxy @ (G.Vector v)) (G.basicUnsafeSlice i n) vs
   --
   {-# INLINE basicUnsafeIndexM #-}
   basicUnsafeIndexM (DF _ vs) i
     = H.sequence
-    $ H.mapNat (\v -> G.basicUnsafeIndexM v i) vs
+    $ H.map (Proxy @ (G.Vector v)) (\v -> G.basicUnsafeIndexM v i) vs
   --
   {-# INLINE basicUnsafeFreeze #-}
   basicUnsafeFreeze (MDF i mv) = do
-    vs <- H.sequenceF $ H.mapNat (Compose . G.basicUnsafeFreeze) mv
+    vs <- H.sequenceF $ H.map (Proxy @ (G.Vector v)) (Compose . G.basicUnsafeFreeze) mv
     return $ DF i vs
   --
   {-# INLINE basicUnsafeThaw #-}
   basicUnsafeThaw (DF i vs) = do
-    mv <- H.sequenceF $ H.mapNat (Compose . G.basicUnsafeThaw) vs
+    mv <- H.sequenceF $ H.map (Proxy @ (G.Vector v)) (Compose . G.basicUnsafeThaw) vs
     return $ MDF i mv
 
 
@@ -161,38 +164,43 @@ instance (sym ~ sym') => IsLabel sym' (L sym) where
 
 
 -- | Lens which gives access to individual columns of data type
-le :: forall sym f a. ( SymIndex sym (Labels a) (Elems a)
-                      , HVector a
-                      , Functor f
-                      )
+le :: forall sym f v a.
+      ( SymIndex sym (Labels a) (Elems a)
+      , HVector a, ArityC (G.Vector v) (Elems a)
+      , G.Vector v (Field a sym)
+      , Functor f
+      )
    => L sym
-   -> (V.Vector (Field a sym) -> f (V.Vector (Field a sym)))
-   -> DF a -> f (DF a)
+   -> (v (Field a sym) -> f (v (Field a sym)))
+   -> DF v a -> f (DF v a)
 le _ f (DF i vs)
   = fmap (DF i)
   $ H.inspectF vs
   $ lensTF (Proxy @ sym) (Proxy @ (Labels a)) f' H.constructF
   where
-    f' v = let check u | V.length u == V.length v = u
+    f' v = let check u | G.length u == G.length v = u
                        | otherwise                = error "Length mismatch!"
            in check <$> f v
 
 -- | Lens which gives access to individual columns of data type
-le' :: forall sym f a b x. ( SymIndex sym (Labels a) (Elems a)
-                           , HVector a
-                           , HVector b
-                           , Elems b ~ UpdatedTypes sym (Labels a) (Elems a) x
-                           , Functor f
-                           )
+le' :: forall sym f v a b x.
+       ( SymIndex sym (Labels a) (Elems a)
+       , HVector a , ArityC (G.Vector v) (Elems a)
+       , HVector b , ArityC (G.Vector v) (Elems b)
+       , Elems b ~ UpdatedTypes sym (Labels a) (Elems a) x
+       , G.Vector v (Field a sym)
+       , G.Vector v x
+       , Functor f
+       )
     => L sym
-    -> (V.Vector (Field a sym) -> f (V.Vector x))
-    -> DF a -> f (DF b)
+    -> (v (Field a sym) -> f (v x))
+    -> DF v a -> f (DF v b)
 le' _ f (DF i vs)
   = fmap (DF i)
   $ H.inspectF vs
   $ lensChTF (Proxy @ sym) (Proxy @ (Labels a)) f' H.constructF
   where
-    f' v = let check u | V.length u == V.length v = u
+    f' v = let check u | G.length u == G.length v = u
                        | otherwise                = error "Length mismatch!"
            in check <$> f v
 
@@ -222,21 +230,23 @@ lev' _ f v = H.inspect v
            $ lensChTF (Proxy @ sym) (Proxy @ (Labels a)) (fmap Identity . f . runIdentity) H.construct
 
 subtype
-  :: forall a b. ( Subtype (Labels b) (Elems b) (Labels a) (Elems a)
-                 , HVector a
-                 , HVector b
-                 )
+  :: forall a b v.
+     ( Subtype (Labels b) (Elems b) (Labels a) (Elems a)
+     , HVector a
+     , HVector b
+     )
   => a -> b
 subtype v
   = H.inspect v
   $ fmap C.vector (subtypeTF (Proxy @ (Labels b)) (Proxy @ (Labels a)))
 
 subtypeDF
-  :: forall a b. ( Subtype (Labels b) (Elems b) (Labels a) (Elems a)
-                 , HVector a
-                 , HVector b
-                 )
-  => DF a -> DF b
+  :: forall a b v.
+     ( Subtype (Labels b) (Elems b) (Labels a) (Elems a)
+     , HVector a , ArityC (G.Vector v) (Elems a)
+     , HVector b , ArityC (G.Vector v) (Elems b)
+     )
+  => DF v a -> DF v b
 subtypeDF (DF i v)
   = DF i
   $ H.inspectF v
@@ -263,6 +273,3 @@ instance ( Arity (Elems a ++ Elems b)
   construct = C.uncurryMany $ do
     a <- H.construct
     return $ (a :+:) <$> H.construct
-
-identity :: Lens' (Identity a) a
-identity = lens runIdentity (\_ -> Identity)
