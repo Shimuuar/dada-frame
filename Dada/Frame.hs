@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE KindSignatures        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
@@ -163,15 +164,13 @@ instance (sym ~ sym') => IsLabel sym' (L sym) where
 
 
 -- | Lens which gives access to individual columns of data type
-le :: forall sym f v a.
-      ( SymIndex sym (Labels a) (Elems a)
-      , HVector a, ArityC (G.Vector v) (Elems a)
+le :: forall sym v a.
+      ( HVector a
+      , ArityC (G.Vector v) (Elems a)
+      , SymIndex sym (Labels a) (Elems a)
       , G.Vector v (Field a sym)
-      , Functor f
       )
-   => L sym
-   -> (v (Field a sym) -> f (v (Field a sym)))
-   -> DF v a -> f (DF v a)
+   => L sym -> Lens' (DF v a) (v (Field a sym))
 le _ f (DF i vs)
   = fmap (DF i)
   $ H.inspectF vs
@@ -182,18 +181,16 @@ le _ f (DF i vs)
            in check <$> f v
 
 -- | Lens which gives access to individual columns of data type
-le' :: forall sym f v a b x.
+le' :: forall sym v a b x.
        ( SymIndex sym (Labels a) (Elems a)
        , HVector a , ArityC (G.Vector v) (Elems a)
        , HVector b , ArityC (G.Vector v) (Elems b)
        , Elems b ~ UpdatedTypes sym (Labels a) (Elems a) x
        , G.Vector v (Field a sym)
        , G.Vector v x
-       , Functor f
        )
     => L sym
-    -> (v (Field a sym) -> f (v x))
-    -> DF v a -> f (DF v b)
+    -> Lens (DF v a) (DF v b) (v (Field a sym)) (v x)
 le' _ f (DF i vs)
   = fmap (DF i)
   $ H.inspectF vs
@@ -205,26 +202,20 @@ le' _ f (DF i vs)
 
 
 -- | Lens which gives access to individual values in labeled tuple
-lev :: forall sym f a. ( SymIndex sym (Labels a) (Elems a)
-                       , HVector a
-                       , Functor f
-                       )
-    => L sym
-    -> (Field a sym -> f (Field a sym))
-    -> a -> f a
+lev :: forall sym a. ( SymIndex sym (Labels a) (Elems a)
+                     , HVector a
+                     )
+    => L sym -> Lens' a (Field a sym)
 lev _ f v = H.inspect v
           $ lensTF (Proxy @ sym) (Proxy @ (Labels a)) (fmap Identity . f . runIdentity) H.construct
 
 -- | Lens which gives access to individual values in labeled tuple
-lev' :: forall sym f a b x. ( SymIndex sym (Labels a) (Elems a)
-                            , HVector a
-                            , HVector b
-                            , Elems b ~ UpdatedTypes sym (Labels a) (Elems a) x
-                            , Functor f
-                            )
-     => L sym
-     -> (Field a sym -> f x)
-     -> a -> f b
+lev' :: forall sym a b x. ( SymIndex sym (Labels a) (Elems a)
+                          , HVector a
+                          , HVector b
+                          , Elems b ~ UpdatedTypes sym (Labels a) (Elems a) x
+                          )
+     => L sym -> Lens a b (Field a sym) x
 lev' _ f v = H.inspect v
            $ lensChTF (Proxy @ sym) (Proxy @ (Labels a)) (fmap Identity . f . runIdentity) H.construct
 
