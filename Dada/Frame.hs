@@ -19,7 +19,6 @@ import           Data.Functor.Compose
 import           Data.Monoid
 import qualified Data.Vector.Generic         as G
 import qualified Data.Vector.Generic.Mutable as M
-import qualified Data.Vector                 as V
 import qualified Data.Vector.HFixed          as H
 import qualified Data.Vector.HFixed.Cont     as C
 import qualified Data.Vector.HFixed.Class    as C
@@ -230,7 +229,7 @@ lev' _ f v = H.inspect v
            $ lensChTF (Proxy @ sym) (Proxy @ (Labels a)) (fmap Identity . f . runIdentity) H.construct
 
 subtype
-  :: forall a b v.
+  :: forall a b.
      ( Subtype (Labels b) (Elems b) (Labels a) (Elems a)
      , HVector a
      , HVector b
